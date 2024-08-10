@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<body>
+    <div class="living-video-container">
+        <canvas id="canvas" height="360" width="640"></canvas>
+        <video id="video" autoplay loop muted></video>
+        <button id="btn-start">开始直播</button>
+        <button id="btn-pause">暂停直播</button>
+        <button id="btn-stop">结束直播</button>
+    </div>
+    <script>
+        const canvas = document.querySelector("#canvas");
+        const video = document.querySelector("#video");
+        const startBtn = document.querySelector("#btn-start");
+        const pauseBtn = document.querySelector("#btn-pause");
+        const stopBtn = document.querySelector("#btn-stop");
+
+        const videoHeight = 360;
+        const videoWidth = 640;
+        const frameRate = 60;
+        const encodeType = "video/webm;codecs=vp8";
+
+        let chunks = [];
+        let frameId = null;
+        // 0 -> 刚开始状态 | 直播结束; 1 -> 直播中; 2 -> 直播暂停;
+        let status = 0;
+
+        const ctx = canvas.getContext('2d');
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const stream = canvas.captureStream(frameRate);
+        const recorder = new MediaRecorder(stream, {
+            mimeType: encodeType
+        });
+
+        function changeStatus(val) {
+            status = val
+            if (status === 0) {
+                startBtn.disabled = false;
+                pauseBtn.disabled = true;
+                stopBtn.disabled = true;
+                video.style.setProperty('display', 'block');
+            }else if(status === 1 || status === 2) {
+                startBtn.disabled = true;
+                pauseBtn.disabled = false;
+                stopBtn.disabled = false;
+                video.style.setProperty('display', 'none');
+            }
+        }
+
+        function addEvent() {
+            // 当 MediaRecorder 将数据传递给程序
+            recorder.ondataavailable = e => {
+                chunks.push(e.data);
+            };
+
+            // 使用requestAnimationFrame播放每一帧
+            const drawFrame = () => {
+                ctx.drawImage(video, 0, 0, videoWidth, videoHeight);
+                frameId = requestAnimationFrame(drawFrame);
+            }
+
+            startBtn.addEventListener('click', (e) => {
+                changeStatus(1);
+                // 每隔10ms返回一次数据
+                recorder.start(10);
+                drawFrame();
+            })
+            stopBtn.addEventListener('click', (e) => {
+                changeStatus(0);
+                (frameId || frameId === 0) && cancelAnimationFrame(frameId);
+                download();
+            })
+            //打开摄像头，并将数据显示到video标签上
+            navigator.mediaDevices.getUserMedia({
+                audio: false,
+                video: true
+            }).then(mediaStream => {
+                video.srcObject = mediaStream;
+                video.play();
+                startBtn.disabled = false;
+            }).catch(error => {
+                alert("打开摄像头失败");
+            });
+        }
+
+        function init() {
+            changeStatus(0)
+        }
+
+        addEvent();
+        init();
+
+        //下载录制内容
+        function download() {
+            let blob = new Blob(chunks);
+            let url = window.URL.createObjectURL(blob);
+            let link = document.createElement("a");
+            link.href = url;
+            link.download = new Date().getTime() + ".mp4";
+            link.style.display = "none";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            chunks = [];
+        }
+
+    </script>
+</body>
+
+</html>
